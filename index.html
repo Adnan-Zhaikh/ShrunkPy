@@ -10,7 +10,7 @@
 <meta property="og:description" content="Compress, resize, and convert images entirely in your browser — free, no upload, no signup.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<link rel="canonical" href="https://adnan-zhaikh.github.io/side-quests/">
+<link rel="canonical" href="https://adnan-zhaikh.github.io/shrunkpy/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -228,11 +228,12 @@
     text-decoration: underline;
   }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 </head>
 <body>
 
 <header>
-  <div class="tag mono">side-quests / toolkit</div>
+  <div class="tag mono">Shrunkpy / toolkit</div>
   <h1>Compress, resize, and convert images. Free, no upload.</h1>
   <p>Runs entirely in your browser. Nothing you drop here ever leaves your device — no server, no upload, no accounts, no watermark.</p>
 </header>
@@ -258,6 +259,11 @@
       <div class="num">04</div>
       <h3>Image Compressor</h3>
       <p>Hit a target file size</p>
+    </button>
+    <button class="quest-card" data-tool="pdfcompressor">
+      <div class="num">05</div>
+      <h3>PDF Compressor</h3>
+      <p>Shrink embedded images in a PDF</p>
     </button>
   </div>
 
@@ -313,6 +319,27 @@
     </div>
     <div class="preview" id="preview-compressor"></div>
     <div id="result-compressor"></div>
+  </div>
+
+  <!-- PDF COMPRESSOR -->
+  <div class="workspace" id="ws-pdfcompressor">
+    <h2>05 // PDF Compressor</h2>
+    <p style="font-size:12.5px;color:var(--text-dim);margin:-8px 0 18px;">
+      Recompresses JPEG images embedded in the PDF. Text stays selectable — only photos/scans shrink. Images already saved in other formats (like PNG) inside the PDF are left untouched.
+    </p>
+    <div class="dropzone" id="dz-pdfcompressor">Drop a PDF here, or click to choose</div>
+    <input type="file" id="input-pdfcompressor" accept="application/pdf" style="display:none">
+    <div class="row">
+      <label>Target size</label>
+      <input type="number" id="target-pdfcompressor" value="500" min="1" style="width:90px;">
+      <select id="unit-pdfcompressor">
+        <option value="1024">KB</option>
+        <option value="1048576">MB</option>
+      </select>
+      <button class="action" id="btn-pdfcompressor" disabled>Compress & Download</button>
+    </div>
+    <div id="status-pdfcompressor" style="font-size:13px;color:var(--text-dim);margin-top:10px;"></div>
+    <div id="result-pdfcompressor"></div>
   </div>
 </main>
 
@@ -485,6 +512,139 @@ document.getElementById('btn-compressor').addEventListener('click', () => {
   }
 
   attempt();
+});
+
+// ---------- 05: PDF Compressor ----------
+const { PDFDocument, PDFName, PDFRawStream, PDFStream } = PDFLib;
+
+let pdfBytesOriginal = null, pdfFile = null;
+
+setupDropzone('dz-pdfcompressor', 'input-pdfcompressor', async files => {
+  const file = files[0];
+  if (!file) return;
+  pdfFile = file;
+  pdfBytesOriginal = new Uint8Array(await file.arrayBuffer());
+  document.getElementById('status-pdfcompressor').textContent =
+    `${file.name} — ${byteConvert(pdfBytesOriginal.length)}`;
+  document.getElementById('btn-pdfcompressor').disabled = false;
+});
+
+// Loads an image's raw bytes into an offscreen canvas via the browser's own
+// JPEG decoder (this replaces jpeg-js from the sandbox prototype — real
+// browsers decode JPEG natively through <img>/canvas, which is the
+// well-trodden part; the pdf-lib object surgery is what was actually tested).
+function decodeJpegBytesToCanvas(bytes) {
+  return new Promise((resolve, reject) => {
+    const blob = new Blob([bytes], { type: 'image/jpeg' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      resolve(canvas);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+    img.src = url;
+  });
+}
+
+function canvasToJpegBytes(canvas, quality) {
+  return new Promise(resolve => {
+    canvas.toBlob(async blob => {
+      resolve(new Uint8Array(await blob.arrayBuffer()));
+    }, 'image/jpeg', quality);
+  });
+}
+
+async function findJpegImages(doc) {
+  const entries = doc.context.enumerateIndirectObjects();
+  const found = [];
+  for (const [ref, obj] of entries) {
+    if (!(obj instanceof PDFStream)) continue;
+    const dict = obj.dict;
+    const subtype = dict.get(PDFName.of('Subtype'));
+    const filter = dict.get(PDFName.of('Filter'));
+    if (!subtype || subtype.toString() !== '/Image') continue;
+    if (!filter || filter.toString() !== '/DCTDecode') continue; // skip non-JPEG (e.g. PNG) — left untouched
+    found.push({ ref, dict, rawBytes: obj.getContents() });
+  }
+  return found;
+}
+
+document.getElementById('btn-pdfcompressor').addEventListener('click', async () => {
+  const targetValue = parseFloat(document.getElementById('target-pdfcompressor').value);
+  const unitMultiplier = parseInt(document.getElementById('unit-pdfcompressor').value);
+  const targetBytes = targetValue * unitMultiplier;
+  const statusEl = document.getElementById('status-pdfcompressor');
+  const resultEl = document.getElementById('result-pdfcompressor');
+  const btn = document.getElementById('btn-pdfcompressor');
+
+  btn.disabled = true;
+  resultEl.innerHTML = '';
+  statusEl.textContent = 'Reading PDF and finding images...';
+
+  try {
+    const baseDoc = await PDFDocument.load(pdfBytesOriginal);
+    const images = await findJpegImages(baseDoc);
+
+    if (images.length === 0) {
+      statusEl.textContent = '';
+      resultEl.innerHTML = `<div class="result warn">No JPEG images found to compress in this PDF.</div>`;
+      btn.disabled = false;
+      return;
+    }
+
+    statusEl.textContent = `Decoding ${images.length} image(s)...`;
+    const canvases = [];
+    for (const item of images) {
+      canvases.push(await decodeJpegBytesToCanvas(item.rawBytes));
+    }
+
+    let quality = 0.95;
+    let finalBytes = null;
+
+    while (quality > 0.1) {
+      statusEl.textContent = `Trying quality ${Math.round(quality * 100)}...`;
+      const doc = await PDFDocument.load(pdfBytesOriginal);
+      const currentImages = await findJpegImages(doc);
+
+      for (let i = 0; i < currentImages.length; i++) {
+        const { ref, dict } = currentImages[i];
+        const newBytes = await canvasToJpegBytes(canvases[i], quality);
+        dict.set(PDFName.of('Length'), doc.context.obj(newBytes.length));
+        const newStream = PDFRawStream.of(dict, newBytes);
+        doc.context.assign(ref, newStream);
+      }
+
+      const outBytes = await doc.save();
+
+      if (outBytes.length < targetBytes || quality <= 0.15) {
+        finalBytes = outBytes;
+        break;
+      }
+      quality -= 0.1;
+    }
+
+    statusEl.textContent = '';
+    const originalSize = pdfBytesOriginal.length;
+    const finalSize = finalBytes.length;
+    const blob = new Blob([finalBytes], { type: 'application/pdf' });
+    downloadBlob(blob, 'compressed_' + pdfFile.name);
+
+    if (finalSize < targetBytes) {
+      resultEl.innerHTML = `<div class="result">${byteConvert(originalSize)} → ${byteConvert(finalSize)} (quality ${Math.round(quality*100)}, ${images.length} image(s))</div>`;
+    } else {
+      resultEl.innerHTML = `<div class="result warn">Could not reach target. Closest: ${byteConvert(finalSize)} (quality ${Math.round(quality*100)})</div>`;
+    }
+  } catch (e) {
+    statusEl.textContent = '';
+    resultEl.innerHTML = `<div class="result warn">Error: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
 });
 </script>
 
