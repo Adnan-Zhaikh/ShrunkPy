@@ -27,6 +27,18 @@
     --border: #D3C4B3;
   }
 
+  :root[data-theme="dark"] {
+    --bg: #211C1A;
+    --panel: #2C2521;
+    --panel-light: #3A302A;
+    --amber: #E0888C;
+    --amber-dim: #B97680;
+    --text: #F2E9DD;
+    --text-dim: #B9AC9C;
+    --teal: #E2935F;
+    --border: #4A3F37;
+  }
+
   * { box-sizing: border-box; }
 
   body {
@@ -35,15 +47,45 @@
     color: var(--text);
     font-family: 'IBM Plex Sans', sans-serif;
     line-height: 1.5;
+    transition: background 0.15s ease, color 0.15s ease;
   }
 
   .mono { font-family: 'IBM Plex Sans', sans-serif; letter-spacing: 0.4px; }
 
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--teal);
+    color: #FFFFFF;
+    padding: 10px 16px;
+    z-index: 100;
+    font-size: 13px;
+  }
+
+  .skip-link:focus {
+    left: 12px;
+    top: 12px;
+  }
+
   header {
-    padding: 48px 24px 32px;
-    max-width: 900px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--bg);
+    padding: 24px 24px 20px;
+    max-width: 100%;
     margin: 0 auto;
     border-bottom: 1px solid var(--border);
+  }
+
+  header .inner {
+    max-width: 852px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
   }
 
   header .tag {
@@ -55,8 +97,8 @@
   header h1 {
     font-family: 'Lora', serif;
     font-weight: 600;
-    font-size: 34px;
-    margin: 0 0 12px;
+    font-size: 28px;
+    margin: 0 0 10px;
     color: var(--text);
     letter-spacing: -0.3px;
   }
@@ -65,8 +107,22 @@
     color: var(--text-dim);
     max-width: 60ch;
     margin: 0;
-    font-size: 15px;
+    font-size: 14px;
   }
+
+  #theme-toggle {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
+    border-radius: 50%;
+  }
+
+  #theme-toggle:hover { border-color: var(--amber); }
 
   main {
     max-width: 900px;
@@ -180,10 +236,27 @@
     font-size: 13px;
     letter-spacing: 0.2px;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
   }
 
   button.action:hover { background: #bd693f; }
   button.action:disabled { background: var(--amber-dim); cursor: not-allowed; }
+
+  .spinner {
+    width: 13px;
+    height: 13px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #FFFFFF;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: none;
+  }
+
+  .spinner.active { display: inline-block; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   .file-list { margin-top: 16px; }
 
@@ -222,24 +295,89 @@
     color: #7a4326;
   }
 
+  :root[data-theme="dark"] .result { color: var(--teal); }
+
   .result.warn { border-left-color: var(--amber); color: var(--amber); }
 
   a.download-link {
     color: var(--teal);
     text-decoration: underline;
   }
+
+  .faq {
+    margin-top: 40px;
+  }
+
+  .faq h2 {
+    font-family: 'Lora', serif;
+    font-weight: 600;
+    font-size: 22px;
+    margin: 0 0 16px;
+    color: var(--text);
+  }
+
+  .faq details {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 14px 18px;
+    margin-bottom: 8px;
+  }
+
+  .faq summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+  }
+
+  .faq details[open] summary { color: var(--teal); margin-bottom: 8px; }
+
+  .faq p {
+    font-size: 13.5px;
+    color: var(--text-dim);
+    margin: 8px 0 0;
+    line-height: 1.6;
+  }
+
+  #scroll-top {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--teal);
+    color: #FFFFFF;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    z-index: 30;
+  }
+
+  #scroll-top.visible { display: flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 </head>
 <body>
 
+<a href="#main-content" class="skip-link">Skip to content</a>
+
 <header>
-  <div class="tag mono">shrunkpy</div>
-  <h1>Compress, resize, and convert images. Free, no upload.</h1>
-  <p>Runs entirely in your browser. Nothing you drop here ever leaves your device — no server, no upload, no accounts, no watermark.</p>
+  <div class="inner">
+    <div>
+      <div class="tag mono">shrunkpy</div>
+      <h1>Compress, resize, and convert images. Free, no upload.</h1>
+      <p>Runs entirely in your browser. Nothing you drop here ever leaves your device — no server, no upload, no accounts, no watermark.</p>
+    </div>
+    <button id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+  </div>
 </header>
 
-<main>
+<main id="main-content">
   <div class="board">
     <button class="quest-card active" data-tool="analyzer">
       <div class="num">01</div>
@@ -316,7 +454,7 @@
     <div class="row">
       <label>Target size (KB)</label>
       <input type="number" id="target-compressor" value="200" min="1">
-      <button class="action" id="btn-compressor" disabled>Compress & Download</button>
+      <button class="action" id="btn-compressor" disabled><span class="spinner" id="spinner-compressor"></span><span>Compress & Download</span></button>
     </div>
     <div class="preview" id="preview-compressor"></div>
     <div id="result-compressor"></div>
@@ -337,12 +475,38 @@
         <option value="1024">KB</option>
         <option value="1048576">MB</option>
       </select>
-      <button class="action" id="btn-pdfcompressor" disabled>Compress & Download</button>
+      <button class="action" id="btn-pdfcompressor" disabled><span class="spinner" id="spinner-pdfcompressor"></span><span>Compress & Download</span></button>
     </div>
     <div id="status-pdfcompressor" style="font-size:13px;color:var(--text-dim);margin-top:10px;"></div>
     <div id="result-pdfcompressor"></div>
   </div>
+
+  <div class="faq">
+    <h2>FAQ</h2>
+    <details>
+      <summary>Does this upload my files anywhere?</summary>
+      <p>No. Every tool here runs entirely in your browser using the Canvas API and pdf-lib. Your files never leave your device — there's no server involved at all.</p>
+    </details>
+    <details>
+      <summary>Is this really free, with no limits?</summary>
+      <p>Yes. No account, no watermark, no daily file limit, no upgrade prompt. It's a static page — there's no backend cost that would need recovering from you.</p>
+    </details>
+    <details>
+      <summary>What image formats are supported?</summary>
+      <p>JPG, PNG, and WebP for the resizer, converter, and compressor. The converter also correctly flattens transparent PNGs onto a white background when converting to JPG, since JPEG can't store transparency.</p>
+    </details>
+    <details>
+      <summary>How does the PDF compressor work?</summary>
+      <p>It finds JPEG images embedded in the PDF and recompresses them at a lower quality, then rebuilds the PDF with the smaller images swapped in. Text and vector content stay untouched and selectable — only embedded photos/scans shrink. Images already in other formats (like PNG) inside the PDF are left as-is.</p>
+    </details>
+    <details>
+      <summary>Why isn't there a file organizer or bulk renamer here?</summary>
+      <p>Browsers can't rename or move files on your actual filesystem — that's a sandboxing restriction, not something a web app can work around. Those two tools exist as Python CLI scripts instead, in the related <a href="https://github.com/Adnan-Zhaikh/side-quests" style="color:var(--teal);">side-quests</a> repo.</p>
+    </details>
+  </div>
 </main>
+
+<button id="scroll-top" aria-label="Back to top" title="Back to top">↑</button>
 
 <script>
 // ---------- shared helpers ----------
@@ -375,6 +539,35 @@ function downloadBlob(blob, filename) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// ---------- dark mode ----------
+const themeToggle = document.getElementById('theme-toggle');
+const savedTheme = localStorage.getItem('shrunkpy-theme');
+if (savedTheme === 'dark') {
+  document.documentElement.setAttribute('data-theme', 'dark');
+  themeToggle.textContent = '☀️';
+}
+themeToggle.addEventListener('click', () => {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('shrunkpy-theme', 'light');
+    themeToggle.textContent = '🌙';
+  } else {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('shrunkpy-theme', 'dark');
+    themeToggle.textContent = '☀️';
+  }
+});
+
+// ---------- scroll to top ----------
+const scrollTopBtn = document.getElementById('scroll-top');
+window.addEventListener('scroll', () => {
+  scrollTopBtn.classList.toggle('visible', window.scrollY > 400);
+});
+scrollTopBtn.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 // ---------- quest board navigation ----------
 document.querySelectorAll('.quest-card').forEach(card => {
@@ -484,6 +677,10 @@ setupDropzone('dz-compressor', 'input-compressor', files => {
 document.getElementById('btn-compressor').addEventListener('click', () => {
   const targetKB = parseInt(document.getElementById('target-compressor').value);
   const targetBytes = targetKB * 1024;
+  const btn = document.getElementById('btn-compressor');
+  const spinner = document.getElementById('spinner-compressor');
+  btn.disabled = true;
+  spinner.classList.add('active');
 
   const canvas = document.createElement('canvas');
   canvas.width = compImg.width;
@@ -505,6 +702,8 @@ document.getElementById('btn-compressor').addEventListener('click', () => {
         } else {
           resultEl.innerHTML = `<div class="result warn">Could not reach ${targetKB} KB. Closest: ${byteConvert(blob.size)} (quality ${Math.round(quality*100)})</div>`;
         }
+        spinner.classList.remove('active');
+        btn.disabled = false;
       } else {
         quality -= 0.1;
         attempt();
@@ -582,8 +781,10 @@ document.getElementById('btn-pdfcompressor').addEventListener('click', async () 
   const statusEl = document.getElementById('status-pdfcompressor');
   const resultEl = document.getElementById('result-pdfcompressor');
   const btn = document.getElementById('btn-pdfcompressor');
+  const spinner = document.getElementById('spinner-pdfcompressor');
 
   btn.disabled = true;
+  spinner.classList.add('active');
   resultEl.innerHTML = '';
   statusEl.textContent = 'Reading PDF and finding images...';
 
@@ -645,6 +846,7 @@ document.getElementById('btn-pdfcompressor').addEventListener('click', async () 
     resultEl.innerHTML = `<div class="result warn">Error: ${e.message}</div>`;
   } finally {
     btn.disabled = false;
+    spinner.classList.remove('active');
   }
 });
 </script>
